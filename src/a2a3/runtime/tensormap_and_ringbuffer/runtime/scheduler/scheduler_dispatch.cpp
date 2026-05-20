@@ -564,6 +564,8 @@ void SchedulerContext::dispatch_ready_tasks(
 // =============================================================================
 
 int32_t SchedulerContext::resolve_and_dispatch(Runtime *runtime, int32_t thread_idx) {
+    LOG_INFO_V0("Thread %d: At resolve_and_dispatch", thread_idx);
+
     always_assert(sched_ != nullptr);
     CoreTracker &tracker = core_trackers_[thread_idx];
     LOG_INFO_V0("Thread %d: resolve_and_dispatch entry", thread_idx);
@@ -642,70 +644,7 @@ int32_t SchedulerContext::resolve_and_dispatch(Runtime *runtime, int32_t thread_
     l2_swimlane.sched_start_ts = get_sys_cnt_aicpu();
 #endif
 
-#if PTO2_PROFILING
-    // Queue-depth snapshot carried across the iteration boundary: each phase
-    // emit consumes (phase_start_*) and refreshes them with its own end snapshot
-    // so the next phase's "at_start" equals the previous phase's "at_end".
-    //
-    // L2SWIMLANE_NUM_QUEUE_SHAPES (3) matches PTO2_NUM_RESOURCE_SHAPES: AIC/AIV/MIX.
-    //
-    // **Hot-path cost discipline.** Local depth (this thread's PTO2LocalReadyBuffer)
-    // is a single int read on a register-cached stack — free. Shared depth
-    // (PTO2ReadyQueue::size) is two atomic relaxed loads against cache lines
-    // that all peer sched threads also write to (enqueue_pos and dequeue_pos
-    // bounce on every flush_local_bufs + every pop). With both phases emitting
-    // per iter that's 12 cross-core loads × thousands of iters per run, a
-    // measurable AICPU slowdown. Mitigation: lazy + per-iter cached shared
-    // snapshot, refreshed at most once per iteration. The complete-emit and
-    // dispatch-emit in the same iter both reuse the same shared sample; the
-    // big transitions (local→shared flush) still show up across iter boundaries.
-    static_assert(
-        L2SWIMLANE_NUM_QUEUE_SHAPES == PTO2_NUM_RESOURCE_SHAPES,
-        "queue snapshot width must match runtime resource shape count"
-    );
-    int16_t phase_start_local[L2SWIMLANE_NUM_QUEUE_SHAPES] = {0};
-    int16_t phase_start_shared[L2SWIMLANE_NUM_QUEUE_SHAPES] = {0};
-    int16_t iter_shared_snapshot[L2SWIMLANE_NUM_QUEUE_SHAPES] = {0};
-    bool iter_shared_sampled = false;
-    auto capture_local_snapshot = [&](int16_t local_out[L2SWIMLANE_NUM_QUEUE_SHAPES]) {
-        for (int s = 0; s < L2SWIMLANE_NUM_QUEUE_SHAPES; s++) {
-            local_out[s] = static_cast<int16_t>(local_bufs[s].count);
-        }
-    };
-    auto get_or_sample_shared = [&]() -> const int16_t * {
-        if (!iter_shared_sampled) {
-            // Clamp to int16_t max before narrowing. PTO2_PROF_READYQUEUE_SIZE
-            // is in the low thousands today but could grow with platform
-            // scaling — without clamp, sizes above 32767 wrap to negatives
-            // and silently corrupt the snapshot.
-            constexpr size_t kMax = static_cast<size_t>(std::numeric_limits<int16_t>::max());
-            for (int s = 0; s < L2SWIMLANE_NUM_QUEUE_SHAPES; s++) {
-                const size_t qsize = sched_->ready_queues[s].size();
-                iter_shared_snapshot[s] = static_cast<int16_t>(std::min(qsize, kMax));
-            }
-            iter_shared_sampled = true;
-        }
-        return iter_shared_snapshot;
-    };
-    auto capture_phase_end = [&](int16_t local_out[L2SWIMLANE_NUM_QUEUE_SHAPES],
-                                 int16_t shared_out[L2SWIMLANE_NUM_QUEUE_SHAPES]) {
-        capture_local_snapshot(local_out);
-        const int16_t *shared_cached = get_or_sample_shared();
-        for (int s = 0; s < L2SWIMLANE_NUM_QUEUE_SHAPES; s++)
-            shared_out[s] = shared_cached[s];
-    };
-    if (l2_swimlane_level_ >= L2SwimlaneLevel::SCHED_PHASES) {
-        capture_phase_end(phase_start_local, phase_start_shared);
-    }
-#endif
-
-    // Wall-clock timestamp of the last completed task on this thread.
-    // Updated on made_progress; consulted to decide whether the wall-clock
-    // budget for declaring a scheduler hang has elapsed. Initialized to
-    // "now" so the first budget cycle starts when this thread does, not at
-    // an undefined value.
-    uint64_t last_progress_ts = get_sys_cnt_aicpu();
-
+    LOG_INFO_V0("Thread %d: Scheduling Start. (Completed: %s)", thread_idx, completed_.load() ? "True" : "False");
     while (true) {
         if (completed_.load(std::memory_order_acquire)) {
             break;
