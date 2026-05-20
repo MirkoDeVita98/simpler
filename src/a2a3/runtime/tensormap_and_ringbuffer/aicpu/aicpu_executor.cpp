@@ -550,7 +550,7 @@ int32_t AicpuExecutor::run(Runtime *runtime) {
             sched_ctx_.wait_pto2_init_complete();
 
 #if PTO2_PROFILING
-            if (is_l2_swimlane_enabled()) {
+            if (get_l2_perf_level() >= L2PerfLevel::ORCH_PHASES) {
                 l2_perf_aicpu_set_orch_thread_idx(my_thread_idx_);
             }
 #endif
@@ -630,10 +630,9 @@ int32_t AicpuExecutor::run(Runtime *runtime) {
                 cycles_to_us(p.args_cycle), p.args_cycle * 100.0 / total, static_cast<uint64_t>(p.args_atomic_count)
             );
             LOG_INFO_V9(
-                "Thread %d:   fanin+ready    : %.3fus (%.1f%%)  work=%.3fus wait=%.3fus  atomics=%" PRIu64 "",
-                my_thread_idx_, cycles_to_us(p.fanin_cycle), p.fanin_cycle * 100.0 / total,
-                cycles_to_us(p.fanin_cycle - p.fanin_wait_cycle), cycles_to_us(p.fanin_wait_cycle),
-                static_cast<uint64_t>(p.fanin_atomic_count)
+                "Thread %d:   fanin+ready    : %.3fus (%.1f%%)  work=%.3fus wait=%.3fus", my_thread_idx_,
+                cycles_to_us(p.fanin_cycle), p.fanin_cycle * 100.0 / total,
+                cycles_to_us(p.fanin_cycle - p.fanin_wait_cycle), cycles_to_us(p.fanin_wait_cycle)
             );
             LOG_INFO_V9(
                 "Thread %d:   avg/task       : %.3fus", my_thread_idx_,
@@ -680,6 +679,9 @@ int32_t AicpuExecutor::run(Runtime *runtime) {
 #if PTO2_PROFILING
             pto2_submitted_tasks = total_tasks;
 #endif
+
+            // Signal completion to the orchestrator state machine
+            rt_orchestration_done(rt);
 
             sched_ctx_.on_orchestration_done(runtime, rt, my_thread_idx_, total_tasks);
         }
