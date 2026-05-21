@@ -262,6 +262,7 @@ void SchedulerContext::dispatch_shape(
     int32_t thread_idx, PTO2ResourceShape shape, CoreTracker::DispatchPhase phase, PTO2LocalReadyBuffer &local_buf,
     CoreTracker &tracker, bool &entered_drain, bool &made_progress, bool &try_pushed
 ) {
+
 #if PTO2_SCHED_PROFILING
     auto &l2_swimlane = sched_l2_swimlane_[thread_idx];
 #endif
@@ -341,6 +342,7 @@ void SchedulerContext::dispatch_shape(
             if (slot_state->active_mask.requires_sync_start()) {
                 if (is_pending) {
                     sched_->ready_queues[static_cast<int32_t>(shape)].push(slot_state);
+                    LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
                     continue;
                 }
                 int32_t available = cores.count();
@@ -348,9 +350,11 @@ void SchedulerContext::dispatch_shape(
                     flush_publish();
                     if (!enter_drain_mode(slot_state, slot_state->logical_block_num)) {
                         sched_->ready_queues[static_cast<int32_t>(shape)].push(slot_state);
+                        LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
                     }
                     for (int rem = bi + 1; rem < got; rem++) {
                         sched_->ready_queues[static_cast<int32_t>(shape)].push(batch[rem]);
+                        LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
                     }
                     entered_drain = true;
                     break;
@@ -360,6 +364,7 @@ void SchedulerContext::dispatch_shape(
             if (!cores.has_value()) {
                 flush_publish();
                 sched_->ready_queues[static_cast<int32_t>(shape)].push_batch(&batch[bi], got - bi);
+                LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
                 break;
             }
 
@@ -379,6 +384,7 @@ void SchedulerContext::dispatch_shape(
 
             if (slot_state->next_block_idx < slot_state->logical_block_num) {
                 sched_->ready_queues[static_cast<int32_t>(shape)].push(slot_state);
+                LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
             }
 
             for (int32_t b = 0; b < claim; b++) {
@@ -642,7 +648,6 @@ int32_t SchedulerContext::resolve_and_dispatch(Runtime *runtime, int32_t thread_
     l2_swimlane.sched_start_ts = get_sys_cnt_aicpu();
 #endif
 
-    LOG_INFO_V0("Thread %d: Scheduling Start. (Completed: %s)", thread_idx, completed_.load() ? "True" : "False");
     while (true) {
         if (completed_.load(std::memory_order_acquire)) {
             break;
@@ -823,9 +828,35 @@ int32_t SchedulerContext::resolve_and_dispatch(Runtime *runtime, int32_t thread_
             }
         }
 
-        // Phase 4: MIX-strict-priority dispatch with phase-split and
-        // cross-thread idle gating. See dispatch_ready_tasks for the policy.
-        dispatch_ready_tasks(thread_idx, tracker, local_bufs, pmu_active, made_progress, try_pushed);
+        // Phase 4: Two-phase dispatch (idle then pending)
+        const PTO2ResourceShape *dispatch_order = get_dispatch_order(thread_idx);
+        bool entered_drain = false;
+
+        for (int32_t si = 0; si < PTO2_NUM_RESOURCE_SHAPES && !entered_drain; si++) {
+            PTO2ResourceShape shape = dispatch_order[si];
+            for (auto phase : {CoreTracker::DispatchPhase::IDLE, CoreTracker::DispatchPhase::PENDING}) {
+                if (phase == CoreTracker::DispatchPhase::PENDING && unlikely(pmu_active)) break;
+                dispatch_shape(
+                    thread_idx, shape, phase, local_bufs[static_cast<int32_t>(shape)], tracker, entered_drain,
+                    made_progress, try_pushed
+                );
+            }
+        }
+
+        // Requeue local buffers to global ready queue
+        for (int32_t si = 0; si < PTO2_NUM_RESOURCE_SHAPES; si++) {
+            PTO2ResourceShape shape = dispatch_order[si];
+            auto &local_buf = local_bufs[static_cast<int32_t>(shape)];
+            auto &ready_queue = sched_->ready_queues[static_cast<int32_t>(shape)];
+#if PTO2_SCHED_PROFILING
+            l2_perf.local_overflow_count += local_buf.count;
+#endif
+            if (local_buf.count > 0) {
+                ready_queue.push_batch(local_buf.slot_states, local_buf.count);
+                LOG_INFO_V9("Thread %d - Pushed task", thread_idx);
+                local_buf.count = 0;
+            }
+        }
 
 #if PTO2_PROFILING
         if (!try_pushed) {
