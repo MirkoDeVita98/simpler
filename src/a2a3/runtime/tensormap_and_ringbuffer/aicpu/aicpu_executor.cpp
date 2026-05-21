@@ -846,6 +846,9 @@ int32_t AicpuExecutor::performTimingRuns(Runtime *runtime)
             deinit(runtime);
             init(runtime);
         }
+
+        // Synchronizing before actual run
+        barrier();
     }   
 
     if (rc != 0)
