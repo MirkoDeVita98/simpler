@@ -68,6 +68,8 @@ public:
     // Called by AicpuExecutor::deinit() during per-run teardown.
     void deinit();
 
+    void initializePerfCounters();
+
     // =========================================================================
     // Per-thread execution entry points (called by AicpuExecutor::run)
     // =========================================================================
