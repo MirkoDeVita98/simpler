@@ -43,9 +43,8 @@ namespace tri_inv_utils {
 
 template <pipe_t SrcPipe, pipe_t DstPipe>
 AICORE inline void SetWaitFlag(uint32_t id) {
-    using pto::event_t;
-    set_flag(SrcPipe, DstPipe, static_cast<event_t>(id));
-    wait_flag(SrcPipe, DstPipe, static_cast<event_t>(id));
+    set_flag(SrcPipe, DstPipe, static_cast<::event_t>(id));
+    wait_flag(SrcPipe, DstPipe, static_cast<::event_t>(id));
 }
 
 template <
@@ -208,32 +207,31 @@ AICORE inline void PrepareAuxiliaryMatrices(
     TileL1AB I_neg_l1_tile, TileL1AB Zero_l1_tile, TileL1AB I_l1_tile, TileL0A a_l0_tile, TileL0B b_l0_tile,
     TileL0C c_l0_tile
 ) {
-    using pto::event_t;
     TMOV(a_l0_tile, I_neg_l1_tile);  // a_l0 initialized with I_neg
     TMOV(b_l0_tile, I_neg_l1_tile);  // b_l0 initialized with I_neg
-    set_flag(PIPE_MTE1, PIPE_M, static_cast<event_t>(0));
-    wait_flag(PIPE_MTE1, PIPE_M, static_cast<event_t>(0));
+    set_flag(PIPE_MTE1, PIPE_M, static_cast<::event_t>(0));
+    wait_flag(PIPE_MTE1, PIPE_M, static_cast<::event_t>(0));
 
     TMATMUL(c_l0_tile, a_l0_tile, b_l0_tile);  // c_l0 contains I
-    set_flag(PIPE_M, PIPE_FIX, static_cast<event_t>(0));
-    wait_flag(PIPE_M, PIPE_FIX, static_cast<event_t>(0));
+    set_flag(PIPE_M, PIPE_FIX, static_cast<::event_t>(0));
+    wait_flag(PIPE_M, PIPE_FIX, static_cast<::event_t>(0));
 
     TMOV(I_l1_tile, c_l0_tile);  // I_l1 now contains I
-    set_flag(PIPE_FIX, PIPE_MTE1, static_cast<event_t>(0));
-    wait_flag(PIPE_FIX, PIPE_MTE1, static_cast<event_t>(0));
+    set_flag(PIPE_FIX, PIPE_MTE1, static_cast<::event_t>(0));
+    wait_flag(PIPE_FIX, PIPE_MTE1, static_cast<::event_t>(0));
 
     TMOV(b_l0_tile, I_l1_tile);  // b_l0 contains I
-    set_flag(PIPE_MTE1, PIPE_M, static_cast<event_t>(0));
-    wait_flag(PIPE_MTE1, PIPE_M, static_cast<event_t>(0));
+    set_flag(PIPE_MTE1, PIPE_M, static_cast<::event_t>(0));
+    wait_flag(PIPE_MTE1, PIPE_M, static_cast<::event_t>(0));
 
     TMATMUL_ACC(c_l0_tile, c_l0_tile, a_l0_tile,
                 b_l0_tile);  // c_l0 contains zeros
-    set_flag(PIPE_M, PIPE_FIX, static_cast<event_t>(0));
-    wait_flag(PIPE_M, PIPE_FIX, static_cast<event_t>(0));
+    set_flag(PIPE_M, PIPE_FIX, static_cast<::event_t>(0));
+    wait_flag(PIPE_M, PIPE_FIX, static_cast<::event_t>(0));
 
     TMOV(Zero_l1_tile, c_l0_tile);  // Zeros_l1 now contains zeros
-    set_flag(PIPE_FIX, PIPE_MTE1, static_cast<event_t>(0));
-    wait_flag(PIPE_FIX, PIPE_MTE1, static_cast<event_t>(0));
+    set_flag(PIPE_FIX, PIPE_MTE1, static_cast<::event_t>(0));
+    wait_flag(PIPE_FIX, PIPE_MTE1, static_cast<::event_t>(0));
 }
 
 /**
@@ -275,9 +273,8 @@ AICORE inline void InvertSingleTile(
     TileL1AB Y_l1_tile, TileL0A *a_l0_tile, TileL0B *b_l0_tile, TileL0C *c_l0_tile, const uint32_t tile_id,
     const bool swap_parity = false
 ) {
-    using pto::event_t;
-    const event_t event_0 = static_cast<event_t>(tile_id);
-    const event_t event_1 = static_cast<event_t>(tile_id + NumTilesPerCubeIter);
+    const ::event_t event_0 = static_cast<::event_t>(tile_id);
+    const ::event_t event_1 = static_cast<::event_t>(tile_id + NumTilesPerCubeIter);
 
     TMOV(b_l0_tile[0], Y_l1_tile);      // b_l0[0] contains M
     TMOV(a_l0_tile[0], I_neg_l1_tile);  // a_l0[0] contains I_neg
@@ -533,7 +530,6 @@ AICORE inline void TriInvRecUnrollKernel(
     __gm__ OutputT *M_inv, __gm__ InputT *M, __gm__ InputT *I_neg, uint32_t block_dim, uint32_t num_matrices,
     uint32_t num_bsnd_heads = 0, uint32_t is_lower = 0, __gm__ int32_t *cu_seqlens = nullptr
 ) {
-    using pto::event_t;
     /* Initializations */
     constexpr uint32_t TileLen = MatrixSize * MatrixSize;
     constexpr uint32_t FractalSize = 16;  // fractal size for half /bf16
@@ -600,8 +596,8 @@ AICORE inline void TriInvRecUnrollKernel(
         TASSIGN(c_l0_tile[buffer_num], 0x0 + buffer_num * TileLen * sizeof(float));
     }
     TLOAD(I_neg_l1_tile, I_neg_global_in);
-    set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(0));
-    wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(0));
+    set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(0));
+    wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(0));
 
     PrepareAuxiliaryMatrices<TileL1AB, TileL0A, TileL0B, TileL0C>(
         I_neg_l1_tile, Zero_l1_tile, I_l1_tile, a_l0_tile[0], b_l0_tile[0], c_l0_tile[0]
@@ -613,9 +609,9 @@ AICORE inline void TriInvRecUnrollKernel(
     uint32_t bsnd_tile_offsets[NumTilesPerCubeIter] = {0};
     uint32_t bsnd_tile_valid_sizes[NumTilesPerCubeIter] = {0};
     uint32_t next_tile_id_that_waits_for_pipe_fix_pipe_m = 0;
-    set_flag(PIPE_FIX, PIPE_M, static_cast<event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
+    set_flag(PIPE_FIX, PIPE_M, static_cast<::event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
     for (uint32_t tile_id = 0; tile_id < NumTilesPerCubeIter; ++tile_id) {
-        set_flag(PIPE_M, PIPE_MTE2, static_cast<event_t>(tile_id));
+        set_flag(PIPE_M, PIPE_MTE2, static_cast<::event_t>(tile_id));
     }
     for (uint32_t cube_iter = 0; cube_iter < max_iters_per_aic; ++cube_iter) {
         const uint32_t global_index = (cube_iter * block_dim + get_block_idx()) * NumTilesPerCubeIter;
@@ -640,7 +636,7 @@ AICORE inline void TriInvRecUnrollKernel(
                 const uint32_t bsnd_offset = bsnd_tile_offsets[tile_id];
                 const uint32_t valid_size = bsnd_tile_valid_sizes[tile_id];
                 const int row_stride = static_cast<int>(MatrixSize * num_bsnd_heads);
-                wait_flag(PIPE_M, PIPE_MTE2, static_cast<event_t>(tile_id));
+                wait_flag(PIPE_M, PIPE_MTE2, static_cast<::event_t>(tile_id));
                 if (valid_size < MatrixSize) {
                     TileL1ABDynamic Y_dyn_l1_tile(valid_size, valid_size);
                     TASSIGN(Y_dyn_l1_tile, 0x0 + (5 + tile_id) * TileLen * sizeof(InputT));
@@ -649,8 +645,8 @@ AICORE inline void TriInvRecUnrollKernel(
                         {1, 1, 1, row_stride, 1}
                     );
                     TLOAD(Y_dyn_l1_tile, M_global_in_dyn);
-                    set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(tile_id));
-                    wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(tile_id));
+                    set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(tile_id));
+                    wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(tile_id));
                     TFILLPAD(Y_dyn_l1_tile, Y_dyn_l1_tile);
                 } else {
                     GlobalTileIn M_global_in(M + bsnd_offset, {}, {row_stride});
@@ -658,20 +654,20 @@ AICORE inline void TriInvRecUnrollKernel(
                 }
             } else {
                 GlobalTileIn M_global_in(M + (global_index + tile_id) * TileLen);
-                wait_flag(PIPE_M, PIPE_MTE2, static_cast<event_t>(tile_id));
+                wait_flag(PIPE_M, PIPE_MTE2, static_cast<::event_t>(tile_id));
                 TLOAD(Y_l1_tile[tile_id],
                       M_global_in);  // Copies NumTilesPerCubeIter tiles at once
             }
-            set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(tile_id));
+            set_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(tile_id));
         }
 
         constexpr uint32_t final_c_buffer_index = MatrixSize > FractalSize ? 1 : 0;
         for (uint32_t tile_id = 0; (tile_id < NumTilesPerCubeIter) && (global_index + tile_id < num_matrices);
              ++tile_id) {
             // Wait for previous cube iter to write result
-            wait_flag(PIPE_FIX, PIPE_M, static_cast<event_t>(tile_id));
+            wait_flag(PIPE_FIX, PIPE_M, static_cast<::event_t>(tile_id));
             // Wait for loading new matrices from GM
-            wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<event_t>(tile_id));
+            wait_flag(PIPE_MTE2, PIPE_MTE1, static_cast<::event_t>(tile_id));
 
             InvertSingleTile<InputT, TileL1AB, TileL0A, TileL0B, TileL0C, MatrixSize, FractalSize, NumTilesPerCubeIter>(
                 X_l1_tile, I_l1_tile, I_neg_l1_tile, M_neg_l1_tile, Zero_l1_tile, Y_l1_tile[tile_id], a_l0_tile,
@@ -679,7 +675,7 @@ AICORE inline void TriInvRecUnrollKernel(
             );
 
             // Allow next cube_iter to proceed for this tile_id
-            set_flag(PIPE_M, PIPE_MTE2, static_cast<event_t>(tile_id));
+            set_flag(PIPE_M, PIPE_MTE2, static_cast<::event_t>(tile_id));
 
             /* Store result */
             if constexpr (IsBSND) {
@@ -720,13 +716,13 @@ AICORE inline void TriInvRecUnrollKernel(
 #endif
             }
             next_tile_id_that_waits_for_pipe_fix_pipe_m = (tile_id + 1) % NumTilesPerCubeIter;
-            set_flag(PIPE_FIX, PIPE_M, static_cast<event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
+            set_flag(PIPE_FIX, PIPE_M, static_cast<::event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
         }
     }
     for (uint32_t tile_id = 0; tile_id < NumTilesPerCubeIter; ++tile_id) {
-        wait_flag(PIPE_M, PIPE_MTE2, static_cast<pto::event_t>(tile_id));
+        wait_flag(PIPE_M, PIPE_MTE2, static_cast<::event_t>(tile_id));
     }
-    wait_flag(PIPE_FIX, PIPE_M, static_cast<event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
+    wait_flag(PIPE_FIX, PIPE_M, static_cast<::event_t>(next_tile_id_that_waits_for_pipe_fix_pipe_m));
 }
 
 /*
