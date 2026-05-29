@@ -729,7 +729,7 @@ AICORE inline void TriInvRecUnrollKernel(
  * @brief: Computes the inverses of the blocks of tensor M
  */
 template <typename InputT, typename OutputT, uint32_t MatrixSize, uint32_t NumTilesPerCubeIter, bool IsBSND>
-AICORE void runKernelTriInvRecUnroll(
+AICORE __attribute__((always_inline)) void runKernelTriInvRecUnroll(
     __gm__ OutputT *M_inv, __gm__ InputT *M, __gm__ InputT *I_neg, uint32_t block_dim, uint32_t num_matrices,
     uint32_t num_bsnd_heads = 0, uint32_t is_lower = 0, __gm__ int32_t *cu_seqlens = nullptr
 ) {
@@ -744,7 +744,7 @@ AICORE void runKernelTriInvRecUnroll(
 }
 
 template <typename InputT, typename OutputT, uint32_t NumTilesPerCubeIter, bool IsBSND>
-AICORE void run_tri_inv_rec_unroll(
+AICORE __attribute__((always_inline)) void run_tri_inv_rec_unroll(
     __gm__ OutputT *tensor_out, __gm__ InputT *tensor_in, __gm__ InputT *minus_eye_in, uint32_t block_dim,
     uint32_t matrix_size, uint32_t num_matrices, uint32_t num_bsnd_heads, uint32_t is_lower = 0,
     __gm__ int32_t *cu_seqlens = nullptr
@@ -783,7 +783,7 @@ AICORE void run_tri_inv_rec_unroll(
 }
 
 template <typename InputT, typename OutputT, uint32_t NumTilesPerCubeIter, bool IsBSND>
-AICORE void run_tri_inv_rec_unroll_per_num_matrices(
+AICORE __attribute__((always_inline)) void run_tri_inv_rec_unroll_per_num_matrices(
     __gm__ OutputT *tensor_out, __gm__ InputT *tensor_in, __gm__ InputT *minus_eye_in, uint32_t block_dim,
     uint32_t matrix_size, uint32_t num_matrices, uint32_t num_bsnd_heads, uint32_t is_lower = 0,
     __gm__ int32_t *cu_seqlens = nullptr
