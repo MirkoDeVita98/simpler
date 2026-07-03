@@ -150,10 +150,12 @@ extern "C" __aicore__ void kernel_entry(__gm__ int64_t *args) {
 
 #else
 
+#include <pto/pto-inst.hpp>
+
 #include "intrinsic.h"
 
 #define PTO_PA_NO_GLOBAL_ENTRY
-#include "../kernel/pa_entry.cce"
+#include "../kernel/pa_entry.hpp"
 #undef PTO_PA_NO_GLOBAL_ENTRY
 
 static __aicore__ __attribute__((always_inline)) __gm__ uint8_t *tensor_data(__gm__ int64_t *args, int idx) {
